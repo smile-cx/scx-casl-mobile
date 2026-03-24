@@ -13,7 +13,7 @@ An idiomatic Swift port of CASL for iOS and macOS applications.
 
 ```swift
 // Package.swift
-.package(url: "https://github.com/YOUR_ORG/casl-mobile-monorepo", from: "1.0.0")
+.package(url: "https://github.com/smile-cx/scx-casl-mobile", from: "1.0.0")
 // product: .product(name: "SCXCASL", package: "SCXCASL")
 ```
 
@@ -29,7 +29,7 @@ An idiomatic Java port of CASL for Android applications.
 maven { url 'https://jitpack.io' }
 
 // build.gradle
-implementation 'com.github.YOUR_ORG:casl-mobile-monorepo:1.0.0'
+implementation 'com.github.smile-cx:scx-casl-mobile:1.0.0'
 ```
 
 ## About CASL
