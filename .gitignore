@@ -1,0 +1,13 @@
+# Android
+casl-android/build/
+casl-android/.gradle/
+casl-android/local.properties
+casl-android/.idea/caches/
+casl-android/.idea/workspace.xml
+casl-android/.idea/studiobot.xml
+casl-android/.idea/copilot.data.migration.ask2agent.xml
+casl-android/.idea/appInsightsSettings.xml
+
+# iOS / Swift
+casl-ios/.build/
+casl-ios/.swiftpm/

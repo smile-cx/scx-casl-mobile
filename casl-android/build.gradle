@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.library' version '8.7.3'
+    id 'maven-publish'
+}
+
+group = 'cx.smile'
+version = '1.0.0'
+
+android {
+    namespace 'cx.smile.CASL'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    publishing {
+        singleVariant('release') {
+            withSourcesJar()
+        }
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                groupId = 'cx.smile'
+                artifactId = 'CASL-android'
+                version = '1.0.0'
+            }
+        }
+    }
+}
+
+dependencies {
+    // org.json is bundled with the Android SDK; compileOnly avoids packaging it in the AAR
+    compileOnly 'org.json:json:20231013'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20231013'
+}
