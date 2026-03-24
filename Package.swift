@@ -16,12 +16,12 @@ let package = Package(
     targets: [
         .target(
             name: "SCXCASL",
-            path: "Sources/SCXCASL"
+            path: "casl-ios/Sources/SCXCASL"
         ),
         .testTarget(
             name: "SCXCASLTests",
             dependencies: ["SCXCASL"],
-            path: "Tests/SCXCASLTests"
+            path: "casl-ios/Tests/SCXCASLTests"
         )
     ]
 )
