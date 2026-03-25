@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 [PROJECT OR COMPANY NAME]
+ * Copyright (c) 2026 Smile.CX Srl
  * SPDX-License-Identifier: MIT
  *
  * This file is part of a native Java port of CASL (https://github.com/stalniy/casl)
