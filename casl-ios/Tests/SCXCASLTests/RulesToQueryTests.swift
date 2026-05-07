@@ -301,4 +301,74 @@ final class RulesToQueryTests: XCTestCase {
             XCTFail("Expected compound NOT node")
         }
     }
+
+    // MARK: - rulesToCondition (925f1c46 priority fix)
+
+    func testRulesToConditionBoundsCanByPrecedingCannots() {
+        // JS: can('read', 'Post', { _id: 'mega' }) + can('read', 'Post', { state: 'draft' })
+        //     + cannot('read', 'Post', { private: true }) + cannot('read', 'Post', { state: 'archived' })
+        // Each can branch must be bounded by both preceding cannots.
+        let ability = Ability(rules: [
+            RawRule(action: "read", subject: "Post", conditions: ["_id": "mega"]),
+            RawRule(action: "read", subject: "Post", conditions: ["state": "draft"]),
+            RawRule(action: "read", subject: "Post", conditions: ["private": true], inverted: true),
+            RawRule(action: "read", subject: "Post", conditions: ["state": "archived"], inverted: true)
+        ], options: defaultOptions())
+
+        let ast = rulesToAST(ability, action: "read", subjectType: "Post")
+        XCTAssertNotNil(ast)
+        // Top level must be OR (two can branches)
+        guard case .compound(let op, let children) = ast! else {
+            return XCTFail("Expected compound node")
+        }
+        XCTAssertEqual(op, "or")
+        XCTAssertEqual(children.count, 2)
+        // Each branch is an AND (can condition + not-archived + not-private)
+        for branch in children {
+            guard case .compound(let branchOp, let branchChildren) = branch else {
+                return XCTFail("Expected AND branch")
+            }
+            XCTAssertEqual(branchOp, "and")
+            XCTAssertEqual(branchChildren.count, 3)
+        }
+    }
+
+    func testRulesToConditionUnconditionalCanBoundedByCannots() {
+        // JS: can('read', 'Post') + cannot('read', 'Post', { private: true })
+        //     + can('read', 'Post', { author: 123 })
+        // Highest-priority: can(author:123) — no preceding cannots, standalone.
+        // Second: cannot(private:true) — accumulates.
+        // Third: can() — unconditional, becomes a branch bounded by preceding cannot.
+        let ability = Ability(rules: [
+            RawRule(action: "read", subject: "Post"),
+            RawRule(action: "read", subject: "Post", conditions: ["private": true], inverted: true),
+            RawRule(action: "read", subject: "Post", conditions: ["author": 123])
+        ], options: defaultOptions())
+
+        let ast = rulesToAST(ability, action: "read", subjectType: "Post")
+        XCTAssertNotNil(ast)
+        guard case .compound(let op, let children) = ast! else {
+            return XCTFail("Expected compound OR node")
+        }
+        XCTAssertEqual(op, "or")
+        XCTAssertEqual(children.count, 2)
+    }
+
+    func testRulesToConditionIgnoresHigherPriorityCannotWhenCanOverrides() {
+        // JS: cannot('manage', 'Post', { id: 1 }) + can('manage', 'Post', { id: 1 })
+        // The can at higher priority overrides the cannot, so the cannot bound is NOT applied.
+        let ability = Ability(rules: [
+            RawRule(action: "manage", subject: "Post", conditions: ["id": 1], inverted: true),
+            RawRule(action: "manage", subject: "Post", conditions: ["id": 1])
+        ], options: defaultOptions())
+
+        let ast = rulesToAST(ability, action: "manage", subjectType: "Post")
+        XCTAssertNotNil(ast)
+        // Highest-priority can(id:1) has no preceding cannots, so it's standalone — OR with one child
+        guard case .compound(let op, let children) = ast! else {
+            return XCTFail("Expected compound node")
+        }
+        XCTAssertEqual(op, "or")
+        XCTAssertEqual(children.count, 1)
+    }
 }

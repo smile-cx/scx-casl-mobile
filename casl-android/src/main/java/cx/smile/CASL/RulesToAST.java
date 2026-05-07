@@ -24,32 +24,13 @@ public class RulesToAST {
      *
      * @return a CompoundNode/ConditionNode tree, or null if the user is not allowed
      */
-    @SuppressWarnings("unchecked")
     public static Object rulesToAST(Ability ability, String action, String subjectType) {
-        AbilityQuery<Object> query = RulesToQuery.rulesToQuery(ability, action, subjectType,
-                RulesToAST::ruleToAST);
-
-        if (query == null) {
-            return null;
-        }
-
-        List<Object> andNodes = query.getAnd();
-        List<Object> orNodes = query.getOr();
-
-        if (andNodes == null || andNodes.isEmpty()) {
-            if (orNodes != null && !orNodes.isEmpty()) {
-                return buildOr(orNodes);
-            }
-            // Empty query means all allowed
-            return buildAnd(Collections.emptyList());
-        }
-
-        List<Object> finalAnd = new ArrayList<>(andNodes);
-        if (orNodes != null && !orNodes.isEmpty()) {
-            finalAnd.add(buildOr(orNodes));
-        }
-
-        return buildAnd(finalAnd);
+        List<Rule> rules = ability.rulesFor(action, subjectType);
+        return RulesToCondition.rulesToCondition(rules, RulesToAST::ruleToAST, new RulesToCondition.Hooks<Object>() {
+            @Override public Object and(List<Object> c) { return buildAnd(c); }
+            @Override public Object or(List<Object> c) { return buildOr(c); }
+            @Override public Object empty() { return buildAnd(Collections.emptyList()); }
+        });
     }
 
     /**

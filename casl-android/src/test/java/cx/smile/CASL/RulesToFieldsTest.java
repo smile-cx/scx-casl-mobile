@@ -69,6 +69,26 @@ public class RulesToFieldsTest {
     }
 
     @Test
+    public void testSkipsForbiddenProperties() {
+        Map<String, Object> conditions = new LinkedHashMap<>();
+        conditions.put("__proto__.__pollutedValue__", (Object) 1);
+        conditions.put("constructor", (Object) 1);
+        conditions.put("prototype", (Object) 2);
+
+        Ability ability = AbilityBuilder.defineAbility(b ->
+                b.can("read", "Post", conditions));
+
+        Map<String, Object> result = RulesToFields.rulesToFields(ability, "read", "Post");
+        // Forbidden top-level keys are never written
+        assertFalse(result.containsKey("__proto__"));
+        assertFalse(result.containsKey("constructor"));
+        assertFalse(result.containsKey("prototype"));
+        // A path like __proto__.__pollutedValue__ skips the forbidden segment but
+        // does NOT write the leaf under the root map either (full path is blocked)
+        assertFalse(result.containsKey("__pollutedValue__"));
+    }
+
+    @Test
     public void testSkipsExpressions() {
         Map<String, Object> cond1 = new LinkedHashMap<>();
         Map<String, Object> inExpr = new LinkedHashMap<>();

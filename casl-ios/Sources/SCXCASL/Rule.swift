@@ -59,7 +59,8 @@ public class Rule {
             return true
         }
         if object == nil || object is String {
-            return !inverted
+            if !inverted { return true }
+            return conditions?.isEmpty == true
         }
         if let dict = object as? [String: Any], let matcher = _matchesConditions {
             return matcher(dict)

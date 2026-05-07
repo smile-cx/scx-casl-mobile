@@ -1104,4 +1104,26 @@ final class AbilityTests: XCTestCase {
         let actions = ability.actionsFor("Post")
         XCTAssertEqual(actions, ["read"])
     }
+
+    // MARK: - Empty conditions semantics (cedc463d)
+
+    func testEmptyConditionsObjectAllowsAll() {
+        let ability = Ability(rules: [
+            RawRule(action: "manage", subject: "User", conditions: [:])
+        ], options: defaultOptions())
+
+        XCTAssertTrue(ability.can("update", "User"))
+    }
+
+    func testCannotWithEmptyConditionsBlocksWhenCanManageExists() {
+        // Before the fix: cannot({}) on a subject-type check returned !inverted = false
+        // because the code took the early-exit path without evaluating the conditions object.
+        // After the fix: empty {} is treated as "matches all", so the cannot correctly blocks.
+        let ability = Ability(rules: [
+            RawRule(action: "manage", subject: "User", conditions: [:]),
+            RawRule(action: "update", subject: "User", conditions: [:], inverted: true)
+        ], options: defaultOptions())
+
+        XCTAssertFalse(ability.can("update", "User"))
+    }
 }

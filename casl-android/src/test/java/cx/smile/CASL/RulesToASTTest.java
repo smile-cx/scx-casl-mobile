@@ -102,6 +102,65 @@ public class RulesToASTTest {
         assertEquals(10, node.getValue());
     }
 
+    // ---- rulesToCondition priority fix (925f1c46) ----
+
+    @Test
+    public void testRulesToASTBoundsCanBranchesByPrecedingCannots() {
+        // Each can branch must carry the accumulated preceding cannot conditions as AND bounds.
+        Ability ability = AbilityBuilder.defineAbility(b -> {
+            b.can("read", "Post", mapOf("_id", "mega"));
+            b.can("read", "Post", mapOf("state", "draft"));
+            b.cannot("read", "Post", mapOf("private", true));
+            b.cannot("read", "Post", mapOf("state", "archived"));
+        });
+
+        Object result = RulesToAST.rulesToAST(ability, "read", "Post");
+        assertNotNull(result);
+        // Top level must be OR (two can branches)
+        assertTrue(result instanceof CompoundNode);
+        CompoundNode top = (CompoundNode) result;
+        assertEquals("or", top.getOperator());
+        assertEquals(2, top.getChildren().size());
+        // Each branch is AND (can condition + not-archived + not-private)
+        for (Object branch : top.getChildren()) {
+            assertTrue(branch instanceof CompoundNode);
+            CompoundNode andBranch = (CompoundNode) branch;
+            assertEquals("and", andBranch.getOperator());
+            assertEquals(3, andBranch.getChildren().size());
+        }
+    }
+
+    @Test
+    public void testRulesToASTUnconditionalCanBoundedByCannots() {
+        // can() unconditional at low priority becomes a branch bounded by preceding cannots.
+        Ability ability = AbilityBuilder.defineAbility(b -> {
+            b.can("read", "Post");
+            b.cannot("read", "Post", mapOf("private", true));
+            b.can("read", "Post", mapOf("author", 123));
+        });
+
+        Object result = RulesToAST.rulesToAST(ability, "read", "Post");
+        assertNotNull(result);
+        assertTrue(result instanceof CompoundNode);
+        CompoundNode top = (CompoundNode) result;
+        assertEquals("or", top.getOperator());
+        assertEquals(2, top.getChildren().size());
+    }
+
+    @Test
+    public void testRulesToASTHigherPriorityCanOverridesCannotForSameCondition() {
+        // cannot(id:1) then can(id:1) — can has higher priority, cannot is not accumulated.
+        Ability ability = AbilityBuilder.defineAbility(b -> {
+            b.cannot("manage", "Post", mapOf("id", 1));
+            b.can("manage", "Post", mapOf("id", 1));
+        });
+
+        Object result = RulesToAST.rulesToAST(ability, "manage", "Post");
+        assertNotNull(result);
+        // can(id:1) is highest priority with no preceding cannots — standalone OR with one child
+        assertTrue(result instanceof ConditionNode);
+    }
+
     @Test
     public void testInvertedRuleWrappedInNot() {
         Object ast = RulesToAST.ruleToAST(

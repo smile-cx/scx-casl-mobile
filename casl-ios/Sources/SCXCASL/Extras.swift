@@ -86,6 +86,9 @@ public func rulesToFields(_ ability: Ability, action: String, subjectType: Strin
             }
 
             let parts = key.split(separator: ".").map(String.init)
+            if parts.contains(where: { forbiddenProperties.contains($0) }) {
+                continue
+            }
             if parts.count == 1 {
                 result[key] = value
             } else {
@@ -97,17 +100,68 @@ public func rulesToFields(_ ability: Ability, action: String, subjectType: Strin
     return result
 }
 
+private let forbiddenProperties: Set<String> = ["__proto__", "constructor", "prototype"]
+
 private func setNestedValue(_ dict: inout [String: Any], parts: [String], value: Any) {
+    guard let key = parts.first, !forbiddenProperties.contains(key) else { return }
     if parts.count == 1 {
-        dict[parts[0]] = value
+        dict[key] = value
         return
     }
-    var nested = (dict[parts[0]] as? [String: Any]) ?? [:]
+    var nested = (dict[key] as? [String: Any]) ?? [:]
     setNestedValue(&nested, parts: Array(parts.dropFirst()), value: value)
-    dict[parts[0]] = nested
+    dict[key] = nested
 }
 
-// MARK: - RulesToQuery
+// MARK: - RulesToCondition
+
+/// Converts CASL's priority-ordered rules into flat boolean logic for database queries.
+///
+/// Each `can` branch is bounded by all higher-priority `cannot` conditions (AND NOT).
+/// An unconditional `cannot` stops evaluation; an unconditional `can` produces an
+/// "allow all" branch bounded only by preceding `cannot` conditions.
+///
+/// Returns `nil` when not allowed at all, or `empty()` when allowed without conditions.
+public func rulesToCondition<R>(
+    _ rules: [Rule],
+    convert: (Rule) -> R,
+    and: ([R]) -> R,
+    or: ([R]) -> R,
+    empty: () -> R
+) -> R? {
+    var higherCannots: [R] = []
+    var orConditions: [R] = []
+    var hasUnconditionalCan = false
+
+    for rule in rules {
+        if rule.inverted {
+            guard rule.conditions != nil else { break }
+            higherCannots.append(convert(rule))
+        } else {
+            guard rule.conditions != nil else {
+                hasUnconditionalCan = true
+                break
+            }
+            let converted = convert(rule)
+            if higherCannots.isEmpty {
+                orConditions.append(converted)
+            } else {
+                orConditions.append(and([converted] + higherCannots))
+            }
+        }
+    }
+
+    if hasUnconditionalCan {
+        if higherCannots.isEmpty { return empty() }
+        if orConditions.isEmpty { return and(higherCannots) }
+        orConditions.append(and(higherCannots))
+    }
+
+    if orConditions.isEmpty { return nil }
+    return or(orConditions)
+}
+
+// MARK: - RulesToQuery (legacy flat-query shape)
 
 public struct AbilityQuery<R> {
     public var or: [R]?
@@ -119,37 +173,29 @@ public struct AbilityQuery<R> {
     }
 }
 
-/// Converts ability rules into a query structure.
-/// Returns nil if not allowed.
-/// Returns AbilityQuery() (empty) if allowed without conditions.
+/// Converts ability rules into a flat query structure.
+/// Returns nil if not allowed; returns AbilityQuery() (empty) if allowed without conditions.
+///
+/// Note: this uses a simplified flat model. For correct priority-respecting query generation
+/// use `rulesToCondition` directly (matches JS `rulesToCondition` from `@casl/ability/extra`).
 public func rulesToQuery<R>(_ ability: Ability, action: String, subjectType: String, convert: (Rule) -> R) -> AbilityQuery<R>? {
     let rules = ability.rulesFor(action, subjectType)
-
     var orRules: [R] = []
     var andRules: [R] = []
 
     for rule in rules {
         if rule.conditions == nil {
-            if rule.inverted {
-                // Inverted rule without conditions stops processing
-                break
-            } else {
-                // Regular rule without conditions = allow all
-                return andRules.isEmpty ? AbilityQuery() : AbilityQuery(and: andRules)
-            }
+            if rule.inverted { break }
+            return andRules.isEmpty ? AbilityQuery() : AbilityQuery(and: andRules)
+        }
+        if rule.inverted {
+            andRules.append(convert(rule))
         } else {
-            if rule.inverted {
-                andRules.append(convert(rule))
-            } else {
-                orRules.append(convert(rule))
-            }
+            orRules.append(convert(rule))
         }
     }
 
-    if orRules.isEmpty {
-        return nil
-    }
-
+    if orRules.isEmpty { return nil }
     return AbilityQuery(or: orRules, and: andRules.isEmpty ? nil : andRules)
 }
 
@@ -255,37 +301,17 @@ private func conditionsToAST(_ conditions: [String: Any]) -> ConditionAST {
 
 /// Converts ability rules into an AST tree, mirroring the JS `rulesToAST` function.
 /// Returns nil if the user is not allowed to perform the action.
-/// Uses `rulesToQuery` internally, then combines results into a single AST.
 public func rulesToAST(_ ability: Ability, action: String, subjectType: String) -> ConditionAST? {
-    let query = rulesToQuery(ability, action: action, subjectType: subjectType) { rule -> ConditionAST in
-        guard let ast = ruleToAST(rule) else {
-            // This mirrors the JS error: rule without conditions should not reach here
-            // because rulesToQuery handles condition-less rules separately.
-            // But as a safety measure, return an empty AND.
-            return .compound(op: "and", children: [])
-        }
-        return ast
-    }
-
-    guard let q = query else {
-        return nil
-    }
-
-    // No $and constraints
-    if q.and == nil {
-        if let orNodes = q.or {
-            return .compound(op: "or", children: orNodes)
-        }
-        // Allowed without conditions -> empty AND (matches everything)
-        return .compound(op: "and", children: [])
-    }
-
-    var andNodes = q.and!
-    if let orNodes = q.or {
-        andNodes.append(.compound(op: "or", children: orNodes))
-    }
-
-    return .compound(op: "and", children: andNodes)
+    let rules = ability.rulesFor(action, subjectType)
+    return rulesToCondition(
+        rules,
+        convert: { rule -> ConditionAST in
+            ruleToAST(rule) ?? .compound(op: "and", children: [])
+        },
+        and: { children in .compound(op: "and", children: children) },
+        or: { children in .compound(op: "or", children: children) },
+        empty: { .compound(op: "and", children: []) }
+    )
 }
 
 // MARK: - Subject Helper

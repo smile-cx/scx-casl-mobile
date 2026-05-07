@@ -11,6 +11,9 @@ import java.util.*;
 
 public class RulesToFields {
 
+    private static final Set<String> FORBIDDEN_PROPERTIES = new HashSet<>(
+            Arrays.asList("__proto__", "constructor", "prototype"));
+
     @SuppressWarnings("unchecked")
     public static Map<String, Object> rulesToFields(Ability ability, String action, String subjectType) {
         List<Rule> rules = ability.rulesFor(action, subjectType);
@@ -30,7 +33,16 @@ public class RulesToFields {
                     continue;
                 }
 
-                setByPath(values, fieldName, value);
+                boolean hasForbiddenSegment = false;
+                for (String seg : fieldName.split("\\.", -1)) {
+                    if (FORBIDDEN_PROPERTIES.contains(seg)) {
+                        hasForbiddenSegment = true;
+                        break;
+                    }
+                }
+                if (!hasForbiddenSegment) {
+                    setByPath(values, fieldName, value);
+                }
             }
         }
 
@@ -40,7 +52,9 @@ public class RulesToFields {
     @SuppressWarnings("unchecked")
     private static void setByPath(Map<String, Object> object, String path, Object value) {
         if (!path.contains(".")) {
-            object.put(path, value);
+            if (!FORBIDDEN_PROPERTIES.contains(path)) {
+                object.put(path, value);
+            }
             return;
         }
 
@@ -49,6 +63,7 @@ public class RulesToFields {
 
         for (int i = 0; i < keys.length - 1; i++) {
             String key = keys[i];
+            if (FORBIDDEN_PROPERTIES.contains(key)) return;
             Object existing = ref.get(key);
             if (!(existing instanceof Map)) {
                 existing = new LinkedHashMap<String, Object>();
@@ -57,6 +72,9 @@ public class RulesToFields {
             ref = (Map<String, Object>) existing;
         }
 
-        ref.put(keys[keys.length - 1], value);
+        String lastKey = keys[keys.length - 1];
+        if (!FORBIDDEN_PROPERTIES.contains(lastKey)) {
+            ref.put(lastKey, value);
+        }
     }
 }

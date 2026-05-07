@@ -1016,6 +1016,29 @@ public class AbilityTest {
 
     // ---- Helper methods ----
 
+    // ---- Empty conditions semantics (cedc463d) ----
+
+    @Test
+    public void testEmptyConditionsObjectAllowsAll() {
+        Ability ability = AbilityBuilder.defineAbility(b ->
+                b.can("update", "User", Collections.emptyMap()));
+
+        assertTrue(ability.can("update", "User"));
+    }
+
+    @Test
+    public void testCannotWithEmptyConditionsBlocksWhenCanManageExists() {
+        // Before the fix: cannot({}) on a subject-type check returned !inverted = false,
+        // so the cannot was ignored and access was granted.
+        // After the fix: empty {} means "matches all", so the cannot correctly blocks.
+        Ability ability = AbilityBuilder.defineAbility(b -> {
+            b.can("manage", "User", Collections.emptyMap());
+            b.cannot("update", "User", Collections.emptyMap());
+        });
+
+        assertFalse(ability.can("update", "User"));
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> mapOf(Object... keyValues) {
         Map<String, Object> map = new LinkedHashMap<>();

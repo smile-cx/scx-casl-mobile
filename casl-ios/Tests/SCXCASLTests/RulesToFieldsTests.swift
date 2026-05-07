@@ -56,6 +56,23 @@ final class RulesToFieldsTests: XCTestCase {
         XCTAssertEqual(author?["name"] as? String, "john")
     }
 
+    func testSkipsForbiddenProperties() {
+        let ability = Ability(rules: [
+            RawRule(action: "read", subject: "Post", conditions: [
+                "__proto__.__pollutedValue__": 1,
+                "constructor": 1,
+                "prototype": 2
+            ])
+        ], options: defaultOptions())
+
+        let fields = rulesToFields(ability, action: "read", subjectType: "Post")
+        // Forbidden top-level keys and any path containing a forbidden segment are blocked
+        XCTAssertNil(fields["__proto__"])
+        XCTAssertNil(fields["constructor"])
+        XCTAssertNil(fields["prototype"])
+        XCTAssertNil(fields["__pollutedValue__"])
+    }
+
     func testSkipsQueryExpressions() {
         let ability = Ability(rules: [
             RawRule(action: "read", subject: "Post", conditions: [

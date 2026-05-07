@@ -59,7 +59,8 @@ public class Rule {
         }
 
         if (object == null || object instanceof String) {
-            return !this.inverted;
+            if (!this.inverted) return true;
+            return this.conditions != null && this.conditions.isEmpty();
         }
 
         if (object instanceof Map) {
