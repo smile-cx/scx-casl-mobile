@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'cx.smile'
-version = '1.0.3'
+version = '1.0.4'
 
 android {
     namespace 'cx.smile.CASL'
