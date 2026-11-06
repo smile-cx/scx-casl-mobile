@@ -5,10 +5,10 @@ Native ports of [CASL](https://github.com/stalniy/casl) — the isomorphic autho
 ## Packages
 
 ### casl-ios — Swift
-An idiomatic Swift port of CASL for iOS and macOS applications.
+An idiomatic Swift port of CASL for iOS, macOS and watchOS applications.
 
 - **Language:** Swift
-- **Minimum targets:** iOS 13, macOS 10.15
+- **Minimum targets:** iOS 13, macOS 10.15, watchOS 6
 - **Distribution:** Swift Package Manager (module `SCXCASL`)
 
 ```swift
